@@ -1,5 +1,6 @@
 from obspy import read, read_inventory
 from obspy.clients.fdsn import Client
+from obspy.geodetics.base import kilometers2degrees
 from fetchtool.BaseBuilder import Range, AreaRange
 from fetchtool.Builders import FDSNBuilder
 from fetchtool.Downloader import Downloader, FDSNFetcher
@@ -54,9 +55,7 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
         dl.work(rq)
 
 def clean_data(fdsn_servers):
-    print("Reorganizing data")
-    # lembrar de tirar esse chdir
-    os.chdir("./data")
+    print("Reorganizing data\n")
     events = os.listdir(fdsn_servers.split(",")[0])
 
     for folder in events:
@@ -74,7 +73,9 @@ def clean_data(fdsn_servers):
             client = Client(server)
             files = os.listdir("./%s/%s"%(server, event))
             for file in files:
-                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in allowed_channels:
+                st = read("./%s/%s/%s"%(server, event, file))
+                dist = kilometers2degrees(st[0].stats.sac["dist"])
+                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in allowed_channels and dist >= 15.0:
                     copy("%s/%s/%s"%(server, event, file), "%s/raw"%(event))
                     net = file.split(".")[0]
                     sta = file.split(".")[1]
@@ -94,7 +95,7 @@ def clean_data(fdsn_servers):
         rmtree(server)
 
 def process_data(pre_filt):
-    os.chdir("./data")
+    print("Processing data\n")
     events = os.listdir("./")
     pre_filt = (float(pre_filt.split(",")[0]), float(pre_filt.split(",")[1]),
                      float(pre_filt.split(",")[2]), float(pre_filt.split(",")[3]))
@@ -143,10 +144,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    #request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
-                 #args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
+    request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
+                 args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
 
-    #clean_data(args.fdsn_servers)
+    clean_data(args.fdsn_servers)
     process_data(args.pre_filt)
 
     t2 = time()
