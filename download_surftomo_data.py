@@ -1,4 +1,5 @@
 from obspy import read, read_inventory, UTCDateTime
+from obspy.clients.fdsn import Client
 from fetchtool.BaseBuilder import Range, AreaRange
 from fetchtool.Builders import FDSNBuilder
 from fetchtool.Downloader import Downloader, FDSNFetcher
@@ -6,6 +7,7 @@ from fetchtool.Savers import SacSaver
 import os
 import argparse
 from time import time
+from shutil import copy, rmtree
 
 def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_mag, max_depth, hor_comp, fdsn_servers):
     # Defining areas for events and stations
@@ -25,6 +27,9 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
         ymin, ymax = float(sta_area_str.split("/")[2]), float(sta_area_str.split("/")[3])
         sta_area = AreaRange(xmin, xmax, ymin, ymax)
 
+    if not os.path.isdir(folder):
+        os.mkdir(folder)
+    os.chdir(folder)
 
     for server in fdsn_servers.split(","):
         # Building the request
@@ -38,16 +43,57 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
 
         print("Downloading data from %s."%server)
         if server.upper() == "USP":
-            server = "http://seisrequest.iag.usp.br"
-        ft = FDSNFetcher(server)
+            link = "http://seisrequest.iag.usp.br"
+        else:
+            link = server
+
+        ft = FDSNFetcher(link)
         sv = SacSaver()
 
-        dl = Downloader('./%s'%folder, replacetree=False, show_resume=True, fetcher=ft, saverlist=[sv])
+        dl = Downloader('./%s'%server, replacetree=True, show_resume=True, fetcher=ft, saverlist=[sv])
         dl.work(rq)
 
+def clean_data(fdsn_servers):
+    print("Reorganizing data")
+    # lembrar de tirar esse chdir
+    os.chdir("./data")
+    events = os.listdir(fdsn_servers.split(",")[0])
 
+    for folder in events:
+        if not os.path.isdir(folder):
+            os.mkdir("%s"%folder)
+            os.mkdir("%s/raw"%folder)
+            os.mkdir("%s/resp"%folder)
+
+    # copying data from multiple servers to the corresponding event folder
+    for event in events:
+        print(event)
+        for server in fdsn_servers.split(","):
+            client = Client(server)
+            files = os.listdir("./%s/%s"%(server, event))
+            for file in files:
+                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in ["HHZ", "BHZ", "LHZ"]:
+                    copy("%s/%s/%s"%(server, event, file), "%s/raw"%(event))
+                    net = file.split(".")[0]
+                    sta = file.split(".")[1]
+                    cha = file.split(".")[-2]
+                    # downloading response
+                    try:
+                        inv = client.get_stations(network=net, station=sta, level="response", filename="./%s/resp/STXML.%s.%s.%s"%(event, net, sta, cha))
+                        print("Downloaded response for %s.%s"%(net, sta))
+                    except Exception as e:
+                        # deveria arrumar essa parte pra salvar em um arquivo caso tenha problema
+                        # mas vou deixar como está por enquanto
+                        print("%s %s %s"%(event, net, sta))
+                        print(e)
+
+    # deleting data from previous folders
+    for server in fdsn_servers.split(","):
+        rmtree(server)
 
 if __name__ == "__main__":
+    t1 = time()
+
     parser = argparse.ArgumentParser(description="Download seismic data from IRIS and USP, intended for surface wave tomography.")
     parser.add_argument("--folder", type=str, metavar="", required=True, help="Path where the data will be saved.")
     parser.add_argument("--t0", type=str, metavar="", required=True, help="Initial date string. Ex: 2010-10-01")
@@ -66,5 +112,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
-                 args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
+    #request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
+                 #args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
+
+    clean_data(args.fdsn_servers)
+
+    t2 = time()
+
+    dt = t2 - t1
+    hours = dt // 3600
+    minutes = (dt%3600) // 60
+    seconds = dt - (hours*3600) - (minutes*60)
+    print("Time elapsed: %.f hours, %.f minutes and %.f seconds" %(hours, minutes, seconds))
