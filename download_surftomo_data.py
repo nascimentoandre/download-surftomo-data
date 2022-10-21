@@ -1,4 +1,4 @@
-from obspy import read, read_inventory, UTCDateTime
+from obspy import read, read_inventory
 from obspy.clients.fdsn import Client
 from fetchtool.BaseBuilder import Range, AreaRange
 from fetchtool.Builders import FDSNBuilder
@@ -68,11 +68,13 @@ def clean_data(fdsn_servers):
     # copying data from multiple servers to the corresponding event folder
     for event in events:
         print(event)
+        allowed_channels = ["HHZ", "BHZ", "LHZ", "HHN", "BHN", "LHN", "HHE", "BHE", "LHE",
+                            "HH1", "BH1", "LH1", "HH2", "BH2", "LH2"]
         for server in fdsn_servers.split(","):
             client = Client(server)
             files = os.listdir("./%s/%s"%(server, event))
             for file in files:
-                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in ["HHZ", "BHZ", "LHZ"]:
+                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in allowed_channels:
                     copy("%s/%s/%s"%(server, event, file), "%s/raw"%(event))
                     net = file.split(".")[0]
                     sta = file.split(".")[1]
@@ -91,6 +93,35 @@ def clean_data(fdsn_servers):
     for server in fdsn_servers.split(","):
         rmtree(server)
 
+def process_data(pre_filt):
+    os.chdir("./data")
+    events = os.listdir("./")
+    pre_filt = (float(pre_filt.split(",")[0]), float(pre_filt.split(",")[1]),
+                     float(pre_filt.split(",")[2]), float(pre_filt.split(",")[3]))
+    for event in events:
+        print(event)
+        os.chdir(event)
+        os.mkdir("proc")
+        files = os.listdir("raw")
+        for file in files:
+            st = read("raw/%s"%file)
+            net = file.split(".")[0]
+            sta = file.split(".")[1]
+            cha = file.split(".")[-2]
+            # default parameters:
+            # Trace.remove_response(inventory=None, output='VEL', water_level=60, pre_filt=None,
+            # zero_mean=True, taper=True, taper_fraction=0.05, plot=False, fig=None, **kwargs
+            inv = read_inventory("./resp/STXML.%s.%s.%s"%(net, sta, cha))
+            try:
+                st.remove_response(inventory=inv, output="DISP", pre_filt=pre_filt)
+                st.detrend('linear')
+                st.interpolate(10)
+                st.write("proc/%s"%file)
+                print("Processed %s.%s"%(net, sta))
+            except:
+                print("Error while processing: %s %s %s"%(event, net, sta))
+        os.chdir("./..")
+
 if __name__ == "__main__":
     t1 = time()
 
@@ -105,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--min_mag", type=float, metavar="", default=5.5, help="Minimum magnitude. Default is 5.5")
     parser.add_argument("--min_epi", type=float, metavar="", default=15.0, help="Minimum source-receiver distance in degrees. Default is 15 degrees.")
     parser.add_argument("--max_depth", type=float, metavar="", default=100.0, help="Maximum hypocentral depth. Default is 100 km.")
-    parser.add_argument("--pre_filt", type=str, metavar="", help="Pre filter used for removing instrument response. Example: '0.001, 0.005, 45, 50'")
+    parser.add_argument("--pre_filt", type=str, metavar="", default="0.001,0.004,2,3", help="Pre filter used for removing instrument response. Example: '0.001,0.004,2,3'")
     parser.add_argument("--auth", type=bool, metavar="", default=False, help="Whether to authenticateor not. If True, a file with the credentials must be in the folder.")
     parser.add_argument("--hor_comp", type=bool, metavar="", default=False, help="Whether to keep horizontal components in the query or not")
     parser.add_argument("--fdsn_servers", type=str, metavar="", default="IRIS,USP", help="List of FDSN servers from which data will be retrieved.")
@@ -115,7 +146,8 @@ if __name__ == "__main__":
     #request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
                  #args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
 
-    clean_data(args.fdsn_servers)
+    #clean_data(args.fdsn_servers)
+    process_data(args.pre_filt)
 
     t2 = time()
 
