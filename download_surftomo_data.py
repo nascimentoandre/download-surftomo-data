@@ -10,7 +10,7 @@ import argparse
 from time import time
 from shutil import copy, rmtree
 
-def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_mag, max_depth, hor_comp, fdsn_servers):
+def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_mag, max_depth, hor_comp, fdsn_servers, auth):
     # Defining areas for events and stations
     if ev_area_str == None:
         ev_area = AreaRange.WORLD()
@@ -44,7 +44,13 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
 
         print("Downloading data from %s."%server)
         if server.upper() == "USP":
-            link = "http://seisrequest.iag.usp.br"
+            if auth:
+                cred = open("../credentials", "r")
+                user = cred.readline().strip()
+                password = cred.readline().strip()
+                link = "http://seisrequest.iag.usp.br;%s;%s"%(user, password)
+            else:
+                link = "http://seisrequest.iag.usp.br"
         else:
             link = server
 
@@ -138,14 +144,15 @@ if __name__ == "__main__":
     parser.add_argument("--min_epi", type=float, metavar="", default=15.0, help="Minimum source-receiver distance in degrees. Default is 15 degrees.")
     parser.add_argument("--max_depth", type=float, metavar="", default=100.0, help="Maximum hypocentral depth. Default is 100 km.")
     parser.add_argument("--pre_filt", type=str, metavar="", default="0.001,0.004,2,3", help="Pre filter used for removing instrument response. Example: '0.001,0.004,2,3'")
-    parser.add_argument("--auth", type=bool, metavar="", default=False, help="Whether to authenticateor not. If True, a file with the credentials must be in the folder.")
+    parser.add_argument("--auth", type=bool, metavar="", default=False, help="Whether to authenticate in USP or not. If True, a file with the credentials must be in the folder.")
     parser.add_argument("--hor_comp", type=bool, metavar="", default=False, help="Whether to keep horizontal components in the query or not")
     parser.add_argument("--fdsn_servers", type=str, metavar="", default="IRIS,USP", help="List of FDSN servers from which data will be retrieved.")
 
     args = parser.parse_args()
 
     request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
-                 args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers)
+                 args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers,
+                 args.auth)
 
     clean_data(args.fdsn_servers)
     process_data(args.pre_filt)
