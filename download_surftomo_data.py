@@ -62,7 +62,13 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
 
 def clean_data(fdsn_servers):
     print("Reorganizing data\n")
-    events = os.listdir(fdsn_servers.split(",")[0])
+    events = []
+
+    for server in fdsn_servers.split(","):
+        ev_tmp = os.listdir(server)
+        for ev in ev_tmp:
+            if ev not in events:
+                events.append(ev)
 
     for folder in events:
         if not os.path.isdir(folder):
@@ -70,31 +76,32 @@ def clean_data(fdsn_servers):
             os.mkdir("%s/raw"%folder)
             os.mkdir("%s/resp"%folder)
 
+    allowed_channels = ["HHZ", "BHZ", "LHZ", "HHN", "BHN", "LHN", "HHE", "BHE", "LHE",
+                        "HH1", "BH1", "LH1", "HH2", "BH2", "LH2"]
+
     # copying data from multiple servers to the corresponding event folder
     for event in events:
-        print(event)
-        allowed_channels = ["HHZ", "BHZ", "LHZ", "HHN", "BHN", "LHN", "HHE", "BHE", "LHE",
-                            "HH1", "BH1", "LH1", "HH2", "BH2", "LH2"]
         for server in fdsn_servers.split(","):
-            client = Client(server)
-            files = os.listdir("./%s/%s"%(server, event))
-            for file in files:
-                st = read("./%s/%s/%s"%(server, event, file))
-                dist = kilometers2degrees(st[0].stats.sac["dist"])
-                if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in allowed_channels and dist >= 15.0:
-                    copy("%s/%s/%s"%(server, event, file), "%s/raw"%(event))
-                    net = file.split(".")[0]
-                    sta = file.split(".")[1]
-                    cha = file.split(".")[-2]
-                    # downloading response
-                    try:
-                        inv = client.get_stations(network=net, station=sta, level="response", filename="./%s/resp/STXML.%s.%s.%s"%(event, net, sta, cha))
-                        print("Downloaded response for %s.%s"%(net, sta))
-                    except Exception as e:
-                        # deveria arrumar essa parte pra salvar em um arquivo caso tenha problema
-                        # mas vou deixar como está por enquanto
-                        print("%s %s %s"%(event, net, sta))
-                        print(e)
+            if os.path.isdir("./%s/%s"%(server, event)):
+                client = Client(server)
+                files = os.listdir("./%s/%s"%(server, event))
+                for file in files:
+                    st = read("./%s/%s/%s"%(server, event, file))
+                    dist = kilometers2degrees(st[0].stats.sac["dist"])
+                    if not os.path.isfile("./%s/raw/%s"%(event, file)) and file.split(".")[-2] in allowed_channels and dist >= 15.0:
+                        copy("%s/%s/%s"%(server, event, file), "%s/raw"%(event))
+                        net = file.split(".")[0]
+                        sta = file.split(".")[1]
+                        cha = file.split(".")[-2]
+                        # downloading response
+                        try:
+                            inv = client.get_stations(network=net, station=sta, channel=cha, level="response", filename="./%s/resp/STXML.%s.%s.%s"%(event, net, sta, cha))
+                            print("Downloaded response for %s.%s"%(net, sta))
+                        except Exception as e:
+                            # deveria arrumar essa parte pra salvar em um arquivo caso tenha problema
+                            # mas vou deixar como está por enquanto
+                            print("%s %s %s"%(event, net, sta))
+                            print(e)
 
     # deleting data from previous folders
     for server in fdsn_servers.split(","):
