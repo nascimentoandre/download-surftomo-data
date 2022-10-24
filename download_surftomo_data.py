@@ -67,7 +67,8 @@ def clean_data(fdsn_servers):
     for server in fdsn_servers.split(","):
         ev_tmp = os.listdir(server)
         for ev in ev_tmp:
-            if ev not in events:
+            n_files = len(os.listdir("./%s/%s"%(server, ev)))
+            if ev not in events and n_files > 0:
                 events.append(ev)
 
     for folder in events:
