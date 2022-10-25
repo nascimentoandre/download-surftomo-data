@@ -130,7 +130,8 @@ def process_data(pre_filt):
             try:
                 st.remove_response(inventory=inv, output="DISP", pre_filt=pre_filt)
                 st.detrend('linear')
-                st.interpolate(10)
+                if st[0].stats.sampling_rate > 10.0:
+                    st.interpolate(10)
                 st.write("proc/%s"%file)
                 print("Processed %s.%s"%(net, sta))
             except:
