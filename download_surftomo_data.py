@@ -36,7 +36,7 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
         # Building the request
         rb = FDSNBuilder("usgs", server)
 
-        rq = rb.eventBased(t0, t1, 20.0, ["H"], Range(preset*-1, offset), "Ot", ev_area,
+        rq = rb.eventBased(t0, t1, 40.0, ["H"], Range(preset*-1, offset), "Ot", ev_area,
                            Range(min_mag, 10), Range(0, max_depth), stationRestrictionArea=sta_area)
 
         if not hor_comp:
