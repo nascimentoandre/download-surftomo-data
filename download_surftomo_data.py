@@ -2,7 +2,7 @@ from obspy import read, read_inventory
 from obspy.clients.fdsn import Client
 from obspy.geodetics.base import kilometers2degrees
 from fetchtool.BaseBuilder import Range, AreaRange
-from fetchtool.Builders import FDSNBuilder
+from fetchtool.Builders import FDSNBuilder, CSVBuilder
 from fetchtool.Downloader import Downloader, FDSNFetcher
 from fetchtool.Savers import SacSaver
 import os
@@ -10,7 +10,7 @@ import argparse
 from time import time
 from shutil import copy, rmtree
 
-def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_mag, max_depth, hor_comp, fdsn_servers, auth):
+def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_mag, max_depth, hor_comp, fdsn_servers, auth, gcmt):
     # Defining areas for events and stations
     if ev_area_str == None:
         ev_area = AreaRange.WORLD()
@@ -34,7 +34,11 @@ def request_data(folder, t0, t1, preset, offset, ev_area_str, sta_area_str, min_
 
     for server in fdsn_servers.split(","):
         # Building the request
-        rb = FDSNBuilder("usgs", server)
+        if gcmt:
+            gen_gcmt_catalog(t0, t1, ev_area_str, min_mag, max_depth)
+            rb = CSVBuilder("ev_table.csv", server)
+        else:
+            rb = FDSNBuilder("usgs", server)
 
         rq = rb.eventBased(t0, t1, 40.0, ["H"], Range(preset*-1, offset), "Ot", ev_area,
                            Range(min_mag, 10), Range(0, max_depth), stationRestrictionArea=sta_area)
@@ -110,7 +114,7 @@ def clean_data(fdsn_servers):
 
 def process_data(pre_filt):
     print("Processing data\n")
-    events = os.listdir("./")
+    events = [x for x in os.listdir("./") if os.path.isdir(x)]
     pre_filt = (float(pre_filt.split(",")[0]), float(pre_filt.split(",")[1]),
                      float(pre_filt.split(",")[2]), float(pre_filt.split(",")[3]))
     for event in events:
@@ -138,6 +142,31 @@ def process_data(pre_filt):
                 print("Error while processing: %s %s %s"%(event, net, sta))
         os.chdir("./..")
 
+def gen_gcmt_catalog(t0, t1, ev_area_str, min_mag, max_depth):
+    try:
+        from obspyDMT.utils.event_handler import gcmt_catalog
+    except:
+        print("Error importing gcmt_catalog from obspyDMT.")
+
+    ev_area_str = ev_area_str.strip("()")
+    lonmin, lonmax = float(ev_area_str.split("/")[0]), float(ev_area_str.split("/")[1])
+    latmin, latmax = float(ev_area_str.split("/")[2]), float(ev_area_str.split("/")[3])
+
+    cat = gcmt_catalog(t0, t1, latmin, latmax, lonmin, lonmax, 0, 0, 0, 180, 0, max_depth, min_mag, 10)
+    cat.write("catalog.xml", format="QUAKEML")
+
+    out = open("ev_table.csv", "w")
+
+    for ev in cat:
+        out.write("%s,"%ev.preferred_origin().time)
+        out.write("%s,"%ev.preferred_origin().longitude)
+        out.write("%s,"%ev.preferred_origin().latitude)
+        out.write("%s,"%float(ev.preferred_origin().depth/1000.0))
+        out.write("%s"%ev.magnitudes[0].mag)
+        out.write("\n")
+
+    out.close()
+
 if __name__ == "__main__":
     t1 = time()
 
@@ -155,16 +184,18 @@ if __name__ == "__main__":
     parser.add_argument("--pre_filt", type=str, metavar="", default="0.001,0.004,2,3", help="Pre filter used for removing instrument response. Example: '0.001,0.004,2,3'")
     parser.add_argument("--auth", type=bool, metavar="", default=False, help="Whether to authenticate in USP or not. If True, a file with the credentials must be in the folder.")
     parser.add_argument("--hor_comp", type=bool, metavar="", default=False, help="Whether to keep horizontal components in the query or not")
+    parser.add_argument("--gcmt", type=bool, metavar="", default=False, help="If true, GCMT source parameters will be used instead of USGS.")
     parser.add_argument("--fdsn_servers", type=str, metavar="", default="IRIS,USP", help="List of FDSN servers from which data will be retrieved.")
 
     args = parser.parse_args()
 
     request_data(args.folder, args.t0, args.t1, args.preset, args.offset, args.ev_area,
                  args.sta_area, args.min_mag, args.max_depth, args.hor_comp, args.fdsn_servers,
-                 args.auth)
+                 args.auth, args.gcmt)
 
     clean_data(args.fdsn_servers)
     process_data(args.pre_filt)
+
 
     t2 = time()
 
