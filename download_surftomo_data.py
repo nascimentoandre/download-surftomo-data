@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--offset", type=int, metavar="", default=6000, help="Time in seconds after origin time.")
     parser.add_argument("--sta_area", type=str, metavar="", help="xmin/xmax/ymin/ymax. If not provided, defaults to Brazil.")
     parser.add_argument("--ev_area", type=str, metavar="", help="(xmin/xmax/ymin/ymax). If not provided, defaults to the entire world.")
-    parser.add_argument("--min_mag", type=float, metavar="", default=5.5, help="Minimum magnitude. Default is 5.5")
+    parser.add_argument("--min_mag", type=float, metavar="", default=5.0, help="Minimum magnitude. Default is 5.0")
     parser.add_argument("--min_epi", type=float, metavar="", default=15.0, help="Minimum source-receiver distance in degrees. Default is 15 degrees.")
     parser.add_argument("--max_depth", type=float, metavar="", default=100.0, help="Maximum hypocentral depth. Default is 100 km.")
     parser.add_argument("--pre_filt", type=str, metavar="", default="0.001,0.004,2,3", help="Pre filter used for removing instrument response. Example: '0.001,0.004,2,3'")
