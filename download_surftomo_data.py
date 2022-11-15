@@ -130,14 +130,16 @@ def process_data(pre_filt):
             # default parameters:
             # Trace.remove_response(inventory=None, output='VEL', water_level=60, pre_filt=None,
             # zero_mean=True, taper=True, taper_fraction=0.05, plot=False, fig=None, **kwargs
-            inv = read_inventory("./resp/STXML.%s.%s.%s"%(net, sta, cha))
             try:
+                inv = read_inventory("./resp/STXML.%s.%s.%s"%(net, sta, cha))
                 st.remove_response(inventory=inv, output="DISP", pre_filt=pre_filt)
                 st.detrend('linear')
                 if st[0].stats.sampling_rate > 10.0:
                     st.interpolate(10)
                 st.write("proc/%s"%file)
                 print("Processed %s.%s"%(net, sta))
+            except FileNotFoundError:
+                print("Could not download response for %s.%s.%s"%(net, sta, cha))
             except:
                 print("Error while processing: %s %s %s"%(event, net, sta))
         os.chdir("./..")
